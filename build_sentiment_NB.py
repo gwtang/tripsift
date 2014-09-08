@@ -76,6 +76,7 @@ def main():
     word_tokens_byreviewid = pickle.load(infile)
     infile.close()
 
+    # Don't flatten
     # Flatten the sentences of a reivew into 1D
     # Stem the words too
     word_tokens_byreviewid_flat = {}
