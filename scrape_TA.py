@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from urllib import urlopen
 from subprocess import Popen, PIPE
-from math import ceil
 import os, time, random
 
 def get_html(url, filename, delay=0):
@@ -96,7 +95,9 @@ def main():
 	numreviews, stderr = Popen(cmd, shell=True, stdout=PIPE).communicate()
 	numreviews = numreviews.replace(",","")
 	numreviews = int(numreviews)
-	numreviewpages = int(ceil(numreviews/reviews_per_page))
+	numreviewpages = numreviews/reviews_per_page
+	if numreviews % reviews_per_page > 0:
+		numreviewpages += 1
 
 	while batch < numreviewpages:
 	    batch += 1
