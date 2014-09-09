@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from nltk.classify import NaiveBayesClassifier
 from nltk.stem import WordNetLemmatizer
 from nltk.collocations import BigramCollocationFinder
@@ -5,30 +6,87 @@ from nltk.metrics import BigramAssocMeasures
 from collections import defaultdict
 import nltk.classify.util
 import cPickle as pickle
-import random, itertools
+import random
 
 from nltk.corpus import stopwords
-stopset = set(stopwords.words('english'))
+wnl = WordNetLemmatizer()
+ignore = [wnl.lemmatize(word) for word in stopwords.words('english')]
+ignore.extend([',', '.', '!','?', ';', '(', ')','-',':'])
+ignore = set(ignore)
 
-# The feature is the word, it has been observed, thus True
-def get_unigram_features(words):
-    return dict([(word, True) for word in words])
+def make_folds(vector, n):
+    return [vector[i:i+n] for i in range(0, len(vector), n)]
 
-
-def get_stopword_filtered_features(words):
-    return dict([(word, True) for word in words if word not in stopset])
-
-
-def get_bigram_features(words, score_fn=BigramAssocMeasures.chi_sq, n=1000):
+def get_sent_features(words, score_fn=BigramAssocMeasures.chi_sq, n=1000):
+    # The feature is the word/wordpair; it has been observed, thus True
     bigram_finder = BigramCollocationFinder.from_words(words)
     bigrams = bigram_finder.nbest(score_fn, n)
-    return dict([(ngram, True) for ngram in itertools.chain(words, bigrams)])
+    final_terms = list(set(words) - ignore)
+    for word1, word2 in bigrams:
+	if (word1 in ignore) or (word2 in ignore):
+	    pass
+	else:
+	    final_terms.append((word1, word2))
+    return dict([(ngram, True) for ngram in final_terms])
 
 
-def eval_classifier(negids, posids, word_tokens, feature_type):
+def eval_classifier(traindata, testdata):
+    classifier = NaiveBayesClassifier.train(traindata)
+    truthsets = defaultdict(set)
+    testsets = defaultdict(set)
+ 
+    for i, (features, label) in enumerate(testdata):
+        truthsets[label].add(i)
+        prediction = classifier.classify(features)
+        testsets[prediction].add(i)
+
+    accuracy = nltk.classify.util.accuracy(classifier, testdata)
+    posprecision = nltk.metrics.precision(truthsets['pos'], testsets['pos'])
+    posrecall = nltk.metrics.recall(truthsets['pos'], testsets['pos'])
+    negprecision = nltk.metrics.precision(truthsets['neg'], testsets['neg'])
+    negrecall = nltk.metrics.recall(truthsets['neg'], testsets['neg'])
+    return accuracy, posprecision, posrecall, negprecision, negrecall
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("--folder", type=str, dest="folder")
+    args = parser.parse_args()
+
+    # Load the tokenized reviews (sentences)
+    infile = "%s/NB_trainingdata.senttokens.pyvar" %args.folder
+    infile = open(infile, 'r')
+    word_tokens_byreviewid = pickle.load(infile)
+    infile.close()
+
+    # Load the training reviewids
+    infile = "%s/NB_trainingdata.labels.pyvar" %args.folder
+    infile = open(infile, 'r')
+    keepreviewids = pickle.load(infile)
+    infile.close()
+
+    # Stem the words in the sentences
+    # Separate each sentence into a unique entry
+    wnl = WordNetLemmatizer()
+    word_tokens_byreviewid_expanded = {}
+    negtags = []; postags = []
+    for reviewid in word_tokens_byreviewid:
+        sents = word_tokens_byreviewid[reviewid]
+	for sent_idx in range(0, len(sents)):
+	    tag = (reviewid, str(sent_idx))
+            words = [wnl.lemmatize(word) for word in sents[sent_idx]]
+	    word_tokens_byreviewid_expanded[tag] = words
+	    if reviewid in keepreviewids[1]:
+		negtags.append(tag)
+	    if reviewid in keepreviewids[5]:
+		postags.append(tag)
+
     # Calculate the features
-    negfeatures = [(feature_type(word_tokens[fid]), 'neg') for fid in negids]
-    posfeatures = [(feature_type(word_tokens[fid]), 'pos') for fid in posids]
+    negfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid]), 'neg') 
+                   for fid in negtags]
+    posfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid]), 'pos') 
+                   for fid in postags]
+    print "neg sents: %d\t pos sents: %d" %(len(negfeatures), len(posfeatures))
 
     # Shuffle and balance the two classes
     n_min = min([len(negfeatures), len(posfeatures)])
@@ -36,70 +94,42 @@ def eval_classifier(negids, posids, word_tokens, feature_type):
     negfeatures = negfeatures[:n_min]
     random.shuffle(posfeatures)
     posfeatures = posfeatures[:n_min]
-
-    # Define training and testing data
-    n_training = n_min*3/4
     print "neg examples: %d\t pos examples: %d" %(len(negfeatures), len(posfeatures))
 
-    traindata = negfeatures[:n_training] + posfeatures[:n_training]
-    testdata = negfeatures[n_training:] + posfeatures[n_training:]
-    print 'train on %d instances, test on %d instances' % (len(traindata), len(testdata))
+    # Define training and testing data
+    numfolds = 10
+    foldsize = n_min/numfolds
+    negfolds = make_folds(negfeatures, foldsize)
+    posfolds = make_folds(posfeatures, foldsize)
 
-    classifier = NaiveBayesClassifier.train(traindata)
-    truthsets = defaultdict(set)
-    testsets = defaultdict(set)
- 
-    for i, (features, label) in enumerate(testdata):
-            truthsets[label].add(i)
-            predicted = classifier.classify(features)
-            testsets[predicted].add(i)
+    # 10 fold cross validation
+    outfile = "%s/NB_sentiment.model.performance.tab" %args.folder
+    outfile = open(outfile, 'w')
+    outfile.write("accuracy\tpos_precision\tpos_recall\tneg_precision\tneg_recall\n")
+    for fold in range(0, numfolds):
+	outfile.write("Fold: %d\n" %fold)
+	testdata = negfolds[fold] + posfolds[fold]
+	traindata = []
+	for i in range(0, numfolds):
+	    if i != fold:
+		traindata += negfolds[i]
+		traindata += posfolds[i]
+    	print 'train on %d instances, test on %d instances' % (len(traindata), len(testdata))
 
-    print 'accuracy:', nltk.classify.util.accuracy(classifier, testdata)
-    print 'pos precision:', nltk.metrics.precision(truthsets['pos'], testsets['pos'])
-    print 'pos recall:', nltk.metrics.recall(truthsets['pos'], testsets['pos'])
-    print 'neg precision:', nltk.metrics.precision(truthsets['neg'], testsets['neg'])
-    print 'neg recall:', nltk.metrics.recall(truthsets['neg'], testsets['neg'])
-
-    classifier.show_most_informative_features()
+    	result = eval_classifier(traindata, testdata)
+	accuracy, posprecision, posrecall, negprecision, negrecall = result
+        outfile.write("%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t" 
+                    %(accuracy, posprecision, posrecall, negprecision, negrecall))
+    outfile.close()
 
     # Save the classifier trained using all data
-    #classifier = NaiveBayesClassifier.train(negfeatures + posfeatures)
-    #outfile = "%s/NB_sentiment.model.pyvar" %resultfolder
-    #outfile = open(outfile, 'w')
-    #pickle.dump(classifier, outfile)
-    #outfile.close()
-
-def main():
-    # Load the tokenized reviews (sentences)
-    infile = "%s/NB_trainingdata.senttokens.pyvar" %resultfolder
-    infile = open(infile, 'r')
-    word_tokens_byreviewid = pickle.load(infile)
-    infile.close()
-
-    # Don't flatten, sentence by sentence level
-    # Flatten the sentences of a reivew into 1D
-    # Stem the words too
-    word_tokens_byreviewid_flat = {}
-    wnl = WordNetLemmatizer()
-    for reviewid in word_tokens_byreviewid:
-        flatten = [word for sent in word_tokens_byreviewid[reviewid] for word in sent]
-        word_tokens_byreviewid_flat[reviewid] = [wnl.lemmatize(word) for word in sent]
-
-    # Load the training reviewids
-    infile = "%s/NB_trainingdata.labels.pyvar" %resultfolder
-    infile = open(infile, 'r')
-    keepreviewids = pickle.load(infile)
-    infile.close()
-
-    # Define the pos and neg sets
-    negids = keepreviewids[1]  # 1 star
-    posids = keepreviewids[5]  # 5 star
-
-    #eval_classifier(negids, posids, word_tokens_byreviewid_flat, get_unigram_features)
-    #eval_classifier(negids, posids, word_tokens_byreviewid_flat, get_stopword_filtered_features)
-    eval_classifier(negids, posids, word_tokens_byreviewid_flat, get_bigram_features)
+    classifier = NaiveBayesClassifier.train(negfeatures + posfeatures)
+    classifier.show_most_informative_features(50)
+    outfile = "%s/NB_sentiment.model.pyvar" %args.folder
+    outfile = open(outfile, 'w')
+    pickle.dump(classifier, outfile)
+    outfile.close()
 
 
 if __name__ == "__main__":
-    resultfolder = "NB_data"
     main()
