@@ -1,34 +1,14 @@
 from argparse import ArgumentParser
 from nltk.classify import NaiveBayesClassifier
 from nltk.stem import WordNetLemmatizer
-from nltk.collocations import BigramCollocationFinder
-from nltk.metrics import BigramAssocMeasures
+from sent_features import get_sent_features
 from collections import defaultdict
 import nltk.classify.util
 import cPickle as pickle
 import random
 
-from nltk.corpus import stopwords
-wnl = WordNetLemmatizer()
-ignore = [wnl.lemmatize(word) for word in stopwords.words('english')]
-ignore.extend([',', '.', '!','?', ';', '(', ')','-',':'])
-ignore = set(ignore)
-
 def make_folds(vector, n):
     return [vector[i:i+n] for i in range(0, len(vector), n)]
-
-def get_sent_features(words, score_fn=BigramAssocMeasures.chi_sq, n=1000):
-    # The feature is the word/wordpair; it has been observed, thus True
-    bigram_finder = BigramCollocationFinder.from_words(words)
-    bigrams = bigram_finder.nbest(score_fn, n)
-    final_terms = list(set(words) - ignore)
-    for word1, word2 in bigrams:
-	if (word1 in ignore) or (word2 in ignore):
-	    pass
-	else:
-	    final_terms.append((word1, word2))
-    return dict([(ngram, True) for ngram in final_terms])
-
 
 def eval_classifier(traindata, testdata):
     classifier = NaiveBayesClassifier.train(traindata)

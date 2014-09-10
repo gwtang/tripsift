@@ -1,7 +1,6 @@
-from nltk import sent_tokenize, word_tokenize
+from tokenization import my_sent_tokenizer, my_word_tokenizer
 from collections import defaultdict
 import cPickle as pickle
-import re, random
 
 def main():
     sourcefolder = "TAwebpages"
@@ -19,7 +18,8 @@ def main():
     for folder in folders:
         filename = "%s/%s/reviewtext.pyvar" %(sourcefolder, folder)
     	filename = open(filename, 'r')
-     	raw_reviews.update(pickle.load(filename))
+	hoteldata = pickle.load(filename)
+     	raw_reviews.update(hoteldata)
     	filename.close()
 
         # Load review star rating
@@ -28,42 +28,27 @@ def main():
         ratings_byreviewid = pickle.load(infile)
         infile.close()
 
-        for key in ratings_byreviewid:
- 	    stars = ratings_byreviewid[key]
-	    if stars in [1,5]:
-		if key in raw_reviews:  # Remove non-english reviews
-	            keepreviewids[stars].append(key)
+	# Keep extreme reviews
+	reviewids = hoteldata.keys()
+	numkept = 0
+        for reviewid in reviewids:
+ 	    stars = ratings_byreviewid[reviewid]
+	    if stars in [1, 5]:
+	        keepreviewids[stars].append(reviewid)
+		numkept += 1
+	    else:
+		del raw_reviews[reviewid]
+	print "%5d extreme reviews for %s" %(numkept, folder)
 
-    print "neg", len(keepreviewids[1])
-    print "pos", len(keepreviewids[5])
+    print "%5d 1-star reviews" %len(keepreviewids[1])
+    print "%5d 5-star reviews" %len(keepreviewids[5])
     reviewids = keepreviewids[1] + keepreviewids[5]
-    print "neg+pos",len(reviewids)
 
     # Convert raw text into sentences
-    sent_tokens_byreviewid = {}
-    for reviewid in reviewids:
-        rawtext = raw_reviews[reviewid]
-        rawtext = rawtext.replace("/", " ")
-        rawtext = str(unicode(rawtext, 'ascii', 'ignore'))
-        rawtext = rawtext.lower()
-        sent_tokens = sent_tokenize(rawtext)
-        sent_tokens_fixed = []
-        for sent in sent_tokens:
-            while re.search("[a-zA-Z][!?.][a-zA-Z]", sent):
-                x,y = re.search("[a-zA-Z][!?.][a-zA-Z]", sent).span()
-                sent_tokens_fixed.append(sent[:x+2])
-                sent = sent[x+2:]
-            sent_tokens_fixed.append(sent)
-        sent_tokens_byreviewid[reviewid] = sent_tokens_fixed
+    sent_tokens_byreviewid = my_sent_tokenizer(raw_reviews)
 
     # Convert setences into words
-    word_tokens_byreviewid = {}
-    for reviewid in reviewids:
-        sent_tokens = sent_tokens_byreviewid[reviewid]
-        word_tokens_byreviewid[reviewid] = []
-        for sent in sent_tokens:
-            word_tokens = word_tokenize(sent)
-            word_tokens_byreviewid[reviewid].append(word_tokens)
+    word_tokens_byreviewid = my_word_tokenizer(sent_tokens_byreviewid)
 
     # Output the tokenized reviews
     outfile = "%s/NB_trainingdata.wordtokens.pyvar" %resultfolder
