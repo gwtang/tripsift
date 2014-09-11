@@ -29,7 +29,7 @@ def my_sent_tokenizer(raw_reviews):
 # Input: dict of reviews that have been broken into sentences
 # key = review id
 # value = list of sentences
-# function returns sentences divided into words
+# function returns sentences divided into words and stemmed
 def my_word_tokenizer(sent_tokens_byreviewid):
     # Convert setences into words
     reviewids = sent_tokens_byreviewid.keys()
