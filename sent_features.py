@@ -1,21 +1,21 @@
 from nltk.collocations import BigramCollocationFinder
 from nltk.metrics import BigramAssocMeasures
 
-def get_sent_features(words, score_fn=BigramAssocMeasures.chi_sq, n=1000):
-    # Determine the bad words
-    bad_words = get_bad_words()
+def get_sent_features(words, good_features=[]): 
+    score_fn=BigramAssocMeasures.chi_sq
 
     # Find the bigrams
     bigram_finder = BigramCollocationFinder.from_words(words)
-    bigrams = bigram_finder.nbest(score_fn, n)
-    final_terms = list(set(words) - bad_words)
-    for word1, word2 in bigrams:
-        if (word1 in bad_words) or (word2 in bad_words):
-            pass
-        else:
-            final_terms.append((word1, word2))
-    # The feature is the word/wordpair; it has been observed, thus True
-    return dict([(ngram, True) for ngram in final_terms])
+    bigrams = bigram_finder.nbest(score_fn, 1000)
+
+    if not good_features:
+	good_features = words
+
+    features = []
+    features.extend(words)
+    features.extend(bigrams)
+    features = list(set(features).intersection(set(good_features)))
+    return dict([(ngram, True) for ngram in features])
 
 
 from nltk.corpus import stopwords

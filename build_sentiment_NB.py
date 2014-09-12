@@ -1,14 +1,19 @@
 from argparse import ArgumentParser
 from nltk.classify import NaiveBayesClassifier
 from nltk.stem import WordNetLemmatizer
-from sent_features import get_sent_features
+from nltk import FreqDist
+from nltk.collocations import BigramCollocationFinder
+from nltk.metrics import BigramAssocMeasures
+from sent_features import get_sent_features, get_bad_words
 from collections import defaultdict
+from pandas import DataFrame
 import nltk.classify.util
 import cPickle as pickle
 import random
 
 def make_folds(vector, n):
     return [vector[i:i+n] for i in range(0, len(vector), n)]
+
 
 def eval_classifier(traindata, testdata):
     classifier = NaiveBayesClassifier.train(traindata)
@@ -61,10 +66,28 @@ def main():
 	    if reviewid in keepreviewids[5]:
 		postags.append(tag)
 
+    # Get all words to analyze frequency of unigrams and bigrams
+    all_words = [word for tag in word_tokens_byreviewid_expanded for word in word_tokens_byreviewid_expanded[tag]]
+    # Get all the stop words
+    stopwords = get_bad_words()
+
+    # Unigrams
+    word_freq_dist = DataFrame(dict(FreqDist(all_words)).items(), columns = ['word','count'])
+    word_freq_dist = word_freq_dist[word_freq_dist['count'] > 100]
+    good_features = list(word_freq_dist['word'])
+
+    # Bigrams
+    bigram_finder = BigramCollocationFinder.from_words(all_words)
+    bigram_finder.apply_freq_filter(50)
+    bigram_finder.apply_word_filter(lambda stopword: stopword in stopwords)
+    bigrams = bigram_finder.nbest(BigramAssocMeasures.chi_sq, 1000)
+    good_features.extend(bigrams)
+    print "Number unigrams + bigrams: %d" %len(good_features)
+
     # Calculate the features
-    negfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid]), 'neg') 
+    negfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid], good_features), 'neg') 
                    for fid in negtags]
-    posfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid]), 'pos') 
+    posfeatures = [(get_sent_features(word_tokens_byreviewid_expanded[fid], good_features) , 'pos') 
                    for fid in postags]
     print "neg sents: %d\t pos sents: %d" %(len(negfeatures), len(posfeatures))
 
@@ -85,9 +108,9 @@ def main():
     # 10 fold cross validation
     outfile = "%s/NB_sentiment.model.performance.tab" %args.folder
     outfile = open(outfile, 'w')
-    outfile.write("accuracy\tpos_precision\tpos_recall\tneg_precision\tneg_recall\n")
+    outfile.write("Fold\taccuracy\tpos_precision\tpos_recall\tneg_precision\tneg_recall\n")
     for fold in range(0, numfolds):
-	outfile.write("Fold: %d\n" %fold)
+	outfile.write("%d\t" %fold)
 	testdata = negfolds[fold] + posfolds[fold]
 	traindata = []
 	for i in range(0, numfolds):
@@ -98,13 +121,12 @@ def main():
 
     	result = eval_classifier(traindata, testdata)
 	accuracy, posprecision, posrecall, negprecision, negrecall = result
-        outfile.write("%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t" 
+        outfile.write("%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" 
                     %(accuracy, posprecision, posrecall, negprecision, negrecall))
     outfile.close()
 
     # Save the classifier trained using all data
     classifier = NaiveBayesClassifier.train(negfeatures + posfeatures)
-    classifier.show_most_informative_features(50)
     outfile = "%s/NB_sentiment.model.pyvar" %args.folder
     outfile = open(outfile, 'w')
     pickle.dump(classifier, outfile)

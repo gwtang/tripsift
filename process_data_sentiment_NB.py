@@ -1,12 +1,16 @@
+from argparse import ArgumentParser
 from tokenization import my_sent_tokenizer, my_word_tokenizer
 from collections import defaultdict
 import cPickle as pickle
 
 def main():
-    sourcefolder = "TAwebpages"
+    parser = ArgumentParser()
+    parser.add_argument("--sourcefolder", type=str, dest="sourcefolder")
+    parser.add_argument("--outputfolder", type=str, dest="resultfolder")
+    parser.add_argument("--file", type=str, dest="filename")
+    args = parser.parse_args()
 
-    infile = "hotel_url_list.forNBsentiment.list"
-    infile = open(infile, 'r')
+    infile = open(args.filename, 'r')
     urllist = infile.read().splitlines()
     infile.close()
 
@@ -16,14 +20,14 @@ def main():
     # Load the raw reviews
     folders = [url.split("-")[4] for url in urllist]
     for folder in folders:
-        filename = "%s/%s/reviewtext.pyvar" %(sourcefolder, folder)
+        filename = "%s/%s/reviewtext.pyvar" %(args.sourcefolder, folder)
     	filename = open(filename, 'r')
 	hoteldata = pickle.load(filename)
      	raw_reviews.update(hoteldata)
     	filename.close()
 
         # Load review star rating
-        infile = "%s/%s/ratings.pyvar" %(sourcefolder, folder)
+        infile = "%s/%s/ratings.pyvar" %(args.sourcefolder, folder)
         infile = open(infile, 'r')
         ratings_byreviewid = pickle.load(infile)
         infile.close()
@@ -51,23 +55,22 @@ def main():
     word_tokens_byreviewid = my_word_tokenizer(sent_tokens_byreviewid)
 
     # Output the tokenized reviews
-    outfile = "%s/NB_trainingdata.wordtokens.pyvar" %resultfolder
+    outfile = "%s/NB_trainingdata.wordtokens.pyvar" %args.resultfolder
     outfile = open(outfile, 'w')
     pickle.dump(sent_tokens_byreviewid, outfile)
     outfile.close()
 
-    outfile = "%s/NB_trainingdata.senttokens.pyvar" %resultfolder
+    outfile = "%s/NB_trainingdata.senttokens.pyvar" %args.resultfolder
     outfile = open(outfile, 'w')
     pickle.dump(word_tokens_byreviewid, outfile)
     outfile.close()
 
     # Output the training reviewids
-    outfile = "%s/NB_trainingdata.labels.pyvar" %resultfolder
+    outfile = "%s/NB_trainingdata.labels.pyvar" %args.resultfolder
     outfile = open(outfile, 'w')
     pickle.dump(keepreviewids, outfile)
     outfile.close()
 
 
 if __name__ == "__main__":
-    resultfolder = "NB_data"
     main()
