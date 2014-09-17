@@ -17,8 +17,8 @@ def my_sent_tokenizer(raw_reviews):
         sent_tokens = sent_tokenize(rawtext)
         sent_tokens_fixed = []
         for sent in sent_tokens:
-            while re.search("[a-zA-Z][!?.][a-zA-Z]", sent):
-                x,y = re.search("[a-zA-Z][!?.][a-zA-Z]", sent).span()
+            while re.search("[a-zA-Z][!?.)][a-zA-Z]", sent):
+                x,y = re.search("[a-zA-Z][!?.)][a-zA-Z]", sent).span()
                 sent_tokens_fixed.append(sent[:x+2])
                 sent = sent[x+2:]
             sent_tokens_fixed.append(sent)
@@ -29,8 +29,10 @@ def my_sent_tokenizer(raw_reviews):
 # Input: dict of reviews that have been broken into sentences
 # key = review id
 # value = list of sentences
-# function returns sentences divided into words and stemmed
-def my_word_tokenizer(sent_tokens_byreviewid):
+# function returns sentences divided into words
+from nltk.stem import WordNetLemmatizer
+wnl = WordNetLemmatizer()
+def my_word_tokenizer(sent_tokens_byreviewid, lemma=False):
     # Convert setences into words
     reviewids = sent_tokens_byreviewid.keys()
     word_tokens_byreviewid = {}
@@ -39,5 +41,7 @@ def my_word_tokenizer(sent_tokens_byreviewid):
         word_tokens_byreviewid[reviewid] = []
         for sent in sent_tokens:
             word_tokens = word_tokenize(sent)
+	    if lemma:
+		word_tokens = [wnl.lemmatize(word) for word in word_tokens]
             word_tokens_byreviewid[reviewid].append(word_tokens)
     return word_tokens_byreviewid
