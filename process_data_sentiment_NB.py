@@ -51,8 +51,11 @@ def main():
     # Convert raw text into sentences
     sent_tokens_byreviewid = my_sent_tokenizer(raw_reviews)
 
-    # Convert setences into words
-    word_tokens_byreviewid = my_word_tokenizer(sent_tokens_byreviewid)
+    # Convert setences into words and stem
+    word_tokens_byreviewid = my_word_tokenizer(sent_tokens_byreviewid, lemma=True)
+
+    # Lemmatize the words
+    
 
     # Output the tokenized reviews
     outfile = "%s/NB_trainingdata.wordtokens.pyvar" %args.resultfolder
