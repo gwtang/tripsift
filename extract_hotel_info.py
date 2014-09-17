@@ -27,11 +27,13 @@ def main():
     location = word_tokenize(info[1])
     location += word_tokenize(info[2])
     location += word_tokenize(info[3])
+    other = ["star", "etc"]
 
     outfile = "%s/hotel_info.txt" %args.folder
     outfile = open(outfile, 'w')
     outfile.write("\n".join(name) + "\n")
-    outfile.write("\n".join(location))
+    outfile.write("\n".join(location) + "\n")
+    outfile.write("\n".join(other))
     outfile.close()
 
 

@@ -26,6 +26,8 @@ def get_review_text(filename, reviewids):
             rawtext = rawtext.replace("<br/>", "")
             rawtext = rawtext.replace("&quot;", "\"")
             rawtext = rawtext.replace("&amp;", "and")
+            rawtext = rawtext.replace("....", ".")
+            rawtext = rawtext.replace("...", ".")
             reviews[reviewid] = rawtext
             keep = False
         i = i + 1

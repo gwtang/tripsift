@@ -47,18 +47,12 @@ def main():
     parser.add_argument("--folder", type=str, dest="folder")
     args = parser.parse_args()
 
-    result = {}
+    ratings_result = {}
+    dates_result = {}
 
     filenames = glob.glob('%s/batch_full_[0-9]*.html' %args.folder)
     for filename in filenames:
         filename = filename.replace("\\","/")
-
-	ratings = get_stars(filename)
-	# Output the ratings
-    	outfile = filename[:-4] + "ratings.txt"
-	outfile = open(outfile, 'w')
-	outfile.write("\n".join(ratings) + "\n")
-	outfile.close()
 
 	dates = get_dates(filename)
 	# Output the review dates
@@ -68,23 +62,35 @@ def main():
 	    outfile.write("%s\t%s\n" %(month, year))
         outfile.close()
 
+        ratings = get_stars(filename)
+        # Output the ratings
+        outfile = filename[:-4] + "ratings.txt"
+        outfile = open(outfile, 'w')
+        outfile.write("\n".join(ratings) + "\n")
+        outfile.close()
+
 	# Load the reivew ids
 	batch = filename.split("_")[-1].split(".")[0]
 	filename = "%s/batch_%s.reviewids.txt" %(args.folder, batch)
 	reviewids = get_reviewids(filename)
 
-	if len(reviewids) == len(ratings):
-	    for i in range(0, len(reviewids)):
-		result[reviewids[i]] = int(ratings[i])
-	else:
-	    print "Error: ratings"
+	for i in range(0, len(reviewids)):
+	    ratings_result[reviewids[i]] = int(ratings[i])
+
+	for i in range(0, len(reviewids)):
+	    dates_result[reviewids[i]] = dates[i][1]
 
     # Output the result dictionary
     outfile = "%s/ratings.pyvar" %args.folder
     outfile = open(outfile, 'w')
-    pickle.dump(result, outfile)
+    pickle.dump(ratings_result, outfile)
     outfile.close()
 
+    # Output the result dictionary
+    outfile = "%s/dates.pyvar" %args.folder
+    outfile = open(outfile, 'w')
+    pickle.dump(dates_result, outfile)
+    outfile.close()
 
 
 if __name__ == "__main__":
