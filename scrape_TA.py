@@ -68,7 +68,7 @@ def get_hotel_reviews(locationid, hotelurl, hotelid, folder, batch, delay=2):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--filename", type=str, dest="filename")
+    parser.add_argument("--file", type=str, dest="filename")
     parser.add_argument("--folder", type=str, dest="folder")
     args = parser.parse_args()
 
